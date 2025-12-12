@@ -23,14 +23,32 @@ api.interceptors.request.use(
 );
 
 export const authAPI = {
-  login: (data: { email: string; password: string }) =>
-    api.post('/auth/login', data),
-  register: (data: { 
-    username: string; 
-    email: string; 
-    password: string; 
-    role?: string 
-  }) => api.post('/auth/register', data),
+  login: async (data: { email: string; password: string }) => {
+    const response = await api.post('/auth/login', data);
+
+    if (response.data.success && response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('token', response.data.token || '');
+    }
+
+    return response;
+  },
+
+  register: async (data: {
+    username: string;
+    email: string;
+    password: string;
+    role?: string
+  }) => {
+    const response = await api.post('/auth/register', data);
+
+    if (response.data.success && response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('token', response.data.token || '');
+    }
+
+    return response;
+  }
 };
 
 export const movieAPI = {
