@@ -13,6 +13,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  // ✅ При первом рендере проверяем localStorage
+  React.useEffect(() => {
+    console.log('Layout: user from AuthContext:', user);
+    console.log('Layout: token in localStorage:', localStorage.getItem('token'));
+  }, [user]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -45,6 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               Сеансы
             </Button>
 
+            {/* ✅ user будет null при первом заходе */}
             {user ? (
               <>
                 <Button
@@ -55,7 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   Профиль
                 </Button>
 
-                {user.role === 'admin' && (
+                {user.role === 'ADMIN' && (
                   <Button
                     color="inherit"
                     component={RouterLink}

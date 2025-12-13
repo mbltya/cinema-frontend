@@ -1,20 +1,24 @@
 // context/AuthContext.tsx
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode } from 'react';
 import axios from 'axios';
 
 interface User {
-  id: string;
+  id: number;
   username: string;
   email: string;
   role: string;
+  joinDate?: string;
+  bookingsCount?: number;
+  totalSpent?: number;
+  favoriteGenres?: string[];
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   register: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  updateProfile: (data: { username: string; email: string }) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (data: Partial<User>) => Promise<{ success: boolean; error?: string; user?: User }>;
   loading: boolean;
 }
 
@@ -34,59 +38,78 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-  const [loading, setLoading] = useState(true);
-
-  // Проверяем токен при загрузке
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      verifyToken(token);
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const verifyToken = async (token: string) => {
+    // Восстанавливаем пользователя ТОЛЬКО если есть валидный токен
     try {
-      const response = await axios.get('http://localhost:5000/api/auth/verify', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const savedUser = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
 
-      if (response.data) {
-        setUser(response.data);
+      // Если нет токена - очищаем всё
+      if (!token) {
+        localStorage.removeItem('user');
+        return null;
       }
+
+      return savedUser ? JSON.parse(savedUser) : null;
     } catch (error) {
+      // При ошибке парсинга - очищаем всё
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-    } finally {
-      setLoading(false);
+      return null;
     }
-  };
+  });
+
+  const [loading, setLoading] = useState(false);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
+
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
+      console.log('Попытка входа с данными:', { email });
+
+      // Пробуем реальный бэкенд
+      const response = await axios.post('http://localhost:8080/api/auth/login', {
         email,
         password,
       });
 
-      if (response.data.token) {
-        const userData = response.data;
-        localStorage.setItem('token', userData.token);
+      console.log('Бэкенд ответил:', response.status, response.data);
+
+      if (response.data.token && response.data.user) {
+        const userData = response.data.user;
+        const token = response.data.token;
+
+        localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-        return { success: true };
+        return { success: true, user: userData };
       }
-      return { success: false, error: 'Ошибка входа' };
+      return { success: false, error: 'Ошибка входа: некорректный ответ сервера' };
+
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Ошибка входа'
-      };
+      console.error('Ошибка при входе:', error);
+
+      // Обрабатываем разные типы ошибок
+      if (error.response) {
+        // Сервер ответил с ошибкой (400, 401, 500 и т.д.)
+        const status = error.response.status;
+        const errorMessage = error.response.data?.error ||
+                           (status === 401 ? 'Неверный email или пароль' :
+                            status === 400 ? 'Некорректные данные' :
+                            `Ошибка сервера (${status})`);
+
+        return { success: false, error: errorMessage };
+
+      } else if (error.request) {
+        // Запрос был сделан, но ответа нет (сеть, CORS, таймаут)
+        console.error('Нет ответа от сервера:', error.message);
+        return { success: false, error: 'Сервер недоступен. Проверьте подключение.' };
+
+      } else {
+        // Ошибка настройки запроса
+        console.error('Ошибка настройки запроса:', error.message);
+        return { success: false, error: 'Ошибка при отправке запроса' };
+      }
+
     } finally {
       setLoading(false);
     }
@@ -95,36 +118,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (username: string, email: string, password: string) => {
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      const response = await axios.post('http://localhost:8080/api/auth/register', {
         username,
         email,
         password,
       });
 
-      if (response.data.token) {
-        const userData = response.data;
-        localStorage.setItem('token', userData.token);
+      if (response.data.token && response.data.user) {
+        const userData = response.data.user;
+        const token = response.data.token;
+
+        localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
         return { success: true };
       }
-      return { success: false, error: 'Ошибка регистрации' };
+      return { success: false, error: 'Ошибка регистрации: некорректный ответ сервера' };
+
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Ошибка регистрации'
-      };
+      console.error('Ошибка при регистрации:', error);
+
+      if (error.response) {
+        const errorMessage = error.response.data?.error || 'Ошибка регистрации';
+        return { success: false, error: errorMessage };
+      } else if (error.request) {
+        return { success: false, error: 'Сервер недоступен. Проверьте подключение.' };
+      } else {
+        return { success: false, error: 'Ошибка при отправке запроса' };
+      }
+
     } finally {
       setLoading(false);
     }
   };
 
-  const updateProfile = async (data: { username: string; email: string }) => {
+  const updateProfile = async (data: Partial<User>) => {
     setLoading(true);
     try {
+      console.log('Обновление профиля:', data);
+
       const token = localStorage.getItem('token');
+
+      if (!token) {
+        return { success: false, error: 'Требуется авторизация' };
+      }
+
       const response = await axios.put(
-        'http://localhost:5000/api/auth/profile',
+        'http://localhost:8080/api/profile',
         data,
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -134,24 +174,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (response.data) {
         const updatedUser = { ...user, ...response.data };
         localStorage.setItem('user', JSON.stringify(updatedUser));
-        setUser(updatedUser);
-        return { success: true };
+        setUser(updatedUser as User);
+        return { success: true, user: updatedUser as User };
       }
-      return { success: false, error: 'Ошибка обновления профиля' };
+
+      return { success: false, error: 'Некорректный ответ сервера' };
+
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Ошибка обновления профиля'
-      };
+      console.error('Ошибка обновления профиля:', error);
+
+      if (error.response) {
+        const status = error.response.status;
+        if (status === 401) {
+          // Токен истек или невалиден
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+          return { success: false, error: 'Сессия истекла. Войдите заново.' };
+        }
+
+        const errorMessage = error.response.data?.error || 'Ошибка обновления профиля';
+        return { success: false, error: errorMessage };
+      }
+
+      return { success: false, error: 'Ошибка соединения' };
+
     } finally {
       setLoading(false);
     }
   };
 
   const logout = () => {
+    // Очищаем все данные
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    console.log('Пользователь вышел из системы');
   };
 
   return (

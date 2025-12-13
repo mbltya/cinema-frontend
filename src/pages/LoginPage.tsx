@@ -10,11 +10,12 @@ import {
   Alert,
   Link,
 } from '@mui/material';
-import { authAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext'; // ✅ Добавляем импорт AuthContext
 import { LoginRequest } from '../types/api.types';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth(); // ✅ Получаем login из AuthContext
   const [formData, setFormData] = useState<LoginRequest>({
     email: '',
     password: '',
@@ -30,29 +31,30 @@ const LoginPage: React.FC = () => {
     }));
   };
 
+  // pages/LoginPage.tsx - минимальные изменения
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await authAPI.login(formData);
-      const { token, role } = response.data;
-      
-      // Сохраняем токен и данные пользователя
-      localStorage.setItem('token', token);
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('userEmail', formData.email);
-      
-      // Перенаправляем в зависимости от роли
-      if (role === 'ADMIN') {
-        navigate('/admin');
+      // Используем login из AuthContext
+      const result = await login(formData.email, formData.password);
+
+      if (result.success && result.user) {
+        // Авторизация успешна
+        if (result.user.role === 'ADMIN') {
+          navigate('/admin');
+        } else {
+          navigate('/profile');
+        }
       } else {
-        navigate('/profile');
+        setError(result.error || 'Ошибка при входе. Проверьте email и пароль.');
       }
-      
+
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Ошибка при входе. Проверьте email и пароль.');
+      console.error('Login error:', err);
+      setError('Произошла ошибка при входе');
     } finally {
       setLoading(false);
     }
