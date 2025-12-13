@@ -34,7 +34,7 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider> {/* ← ДОБАВЬ ЭТУ СТРОКУ! */}
+      <AuthProvider>
         <Router>
           <Layout>
             <Routes>
@@ -44,18 +44,18 @@ const App: React.FC = () => {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/movies" element={<MoviesPage />} />
               <Route path="/sessions" element={<SessionsPage />} />
-              
+
               {/* Защищённые маршруты */}
               <Route path="/booking/:sessionId" element={<BookingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/admin" element={<AdminPage />} />
-              
+
               {/* Резервный маршрут */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
         </Router>
-      </AuthProvider> {/* ← И ЭТУ! */}
+      </AuthProvider>
     </ThemeProvider>
   );
 };
